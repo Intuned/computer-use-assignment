@@ -31,6 +31,10 @@ from anthropic.types.beta import (
 
 from .tools import BashTool, ComputerTool, EditTool, ToolCollection, ToolResult
 
+from playwright.async_api import Page
+
+from .tools.playwright_tool import PlaywrightTool
+
 COMPUTER_USE_BETA_FLAG = "computer-use-2024-10-22"
 PROMPT_CACHING_BETA_FLAG = "prompt-caching-2024-07-31"
 
@@ -53,21 +57,35 @@ PROVIDER_TO_DEFAULT_MODEL_NAME: dict[APIProvider, str] = {
 # We encourage modifying this system prompt to ensure the model has context for the
 # environment it is running in, and to provide any additional information that may be
 # helpful for the task at hand.
+# SYSTEM_PROMPT = f"""<SYSTEM_CAPABILITY>
+# * You are utilising an Ubuntu virtual machine using {platform.machine()} architecture with internet access.
+# * You can feel free to install Ubuntu applications with your bash tool. Use curl instead of wget.
+# * To open firefox, please just click on the firefox icon.  Note, firefox-esr is what is installed on your system.
+# * Using bash tool you can start GUI applications, but you need to set export DISPLAY=:1 and use a subshell. For example "(DISPLAY=:1 xterm &)". GUI apps run with bash tool will appear within your desktop environment, but they may take some time to appear. Take a screenshot to confirm it did.
+# * When using your bash tool with commands that are expected to output very large quantities of text, redirect into a tmp file and use str_replace_editor or `grep -n -B <lines before> -A <lines after> <query> <filename>` to confirm output.
+# * When viewing a page it can be helpful to zoom out so that you can see everything on the page.  Either that, or make sure you scroll down to see everything before deciding something isn't available.
+# * When using your computer function calls, they take a while to run and send back to you.  Where possible/feasible, try to chain multiple of these calls all into one function calls request.
+# * The current date is {datetime.today().strftime('%A, %B %-d, %Y')}.
+# </SYSTEM_CAPABILITY>
+#
+# <IMPORTANT>
+# * When using Firefox, if a startup wizard appears, IGNORE IT.  Do not even click "skip this step".  Instead, click on the address bar where it says "Search or enter address", and enter the appropriate search term or URL there.
+# * If the item you are looking at is a pdf, if after taking a single screenshot of the pdf it seems that you want to read the entire document instead of trying to continue to read the pdf from your screenshots + navigation, determine the URL, use curl to download the pdf, install and use pdftotext to convert it to a text file, and then read that text file directly with your StrReplaceEditTool.
+# </IMPORTANT>"""
+
 SYSTEM_PROMPT = f"""<SYSTEM_CAPABILITY>
-* You are utilising an Ubuntu virtual machine using {platform.machine()} architecture with internet access.
-* You can feel free to install Ubuntu applications with your bash tool. Use curl instead of wget.
-* To open firefox, please just click on the firefox icon.  Note, firefox-esr is what is installed on your system.
-* Using bash tool you can start GUI applications, but you need to set export DISPLAY=:1 and use a subshell. For example "(DISPLAY=:1 xterm &)". GUI apps run with bash tool will appear within your desktop environment, but they may take some time to appear. Take a screenshot to confirm it did.
-* When using your bash tool with commands that are expected to output very large quantities of text, redirect into a tmp file and use str_replace_editor or `grep -n -B <lines before> -A <lines after> <query> <filename>` to confirm output.
+* You are utilising a Playwright chromium browser instead of an Ubuntu virtual machine.
 * When viewing a page it can be helpful to zoom out so that you can see everything on the page.  Either that, or make sure you scroll down to see everything before deciding something isn't available.
-* When using your computer function calls, they take a while to run and send back to you.  Where possible/feasible, try to chain multiple of these calls all into one function calls request.
+* The computer tool is used to control the Chromium browser instead of a traditional computer. Keep this in mind when using the tool. 
+* When using your computer function calls, they take a while to run and send back to you.  Where possible/feasible, try to chain multiple of these calls all into one function calls request.\
+* You have a playwright tool that you use to perform specialized actions on the browser level. You use it to:
+   1. navigate to a webpage. call it with action `goto` with the URL.
+   2. scroll the page. call it with action `scroll` with the dy and dx. Positive values scroll down and right. Negative values scroll up and left.
+   For any other actions, you use the computer tool.
+* You never call the tools with empty actions.
 * The current date is {datetime.today().strftime('%A, %B %-d, %Y')}.
 </SYSTEM_CAPABILITY>
-
-<IMPORTANT>
-* When using Firefox, if a startup wizard appears, IGNORE IT.  Do not even click "skip this step".  Instead, click on the address bar where it says "Search or enter address", and enter the appropriate search term or URL there.
-* If the item you are looking at is a pdf, if after taking a single screenshot of the pdf it seems that you want to read the entire document instead of trying to continue to read the pdf from your screenshots + navigation, determine the URL, use curl to download the pdf, install and use pdftotext to convert it to a text file, and then read that text file directly with your StrReplaceEditTool.
-</IMPORTANT>"""
+"""
 
 
 async def sampling_loop(
@@ -82,6 +100,7 @@ async def sampling_loop(
         [httpx.Request, httpx.Response | object | None, Exception | None], None
     ],
     api_key: str,
+    page: Page,
     only_n_most_recent_images: int | None = None,
     max_tokens: int = 4096,
 ):
@@ -89,9 +108,10 @@ async def sampling_loop(
     Agentic sampling loop for the assistant/tool interaction of computer use.
     """
     tool_collection = ToolCollection(
-        ComputerTool(),
-        BashTool(),
-        EditTool(),
+        ComputerTool(page),
+        PlaywrightTool(page),
+        # BashTool(),
+        # EditTool(),
     )
     system = BetaTextBlockParam(
         type="text",
