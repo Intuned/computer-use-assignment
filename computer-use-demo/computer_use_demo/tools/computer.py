@@ -1,11 +1,6 @@
-import asyncio
-import base64
 import os
-import shutil
 from enum import StrEnum
-from pathlib import Path
 from typing import Literal, TypedDict
-from uuid import uuid4
 
 from anthropic.types.beta import BetaToolComputerUse20241022Param
 
@@ -13,7 +8,7 @@ from .base import BaseAnthropicTool, ToolError, ToolResult
 
 from playwright.async_api import Playwright, Page
 
-from .utils.screenshot import take_screenshot
+from computer_use_demo.utils.screenshot import take_screenshot
 
 OUTPUT_DIR = "/tmp/outputs"
 

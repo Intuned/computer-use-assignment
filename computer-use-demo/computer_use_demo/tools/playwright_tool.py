@@ -6,7 +6,7 @@ from computer_use_demo.tools.base import BaseAnthropicTool, ToolError, ToolFailu
 
 from playwright.async_api import Page
 
-from computer_use_demo.tools.utils.screenshot import take_screenshot
+from computer_use_demo.utils.screenshot import take_screenshot
 
 
 class GotoPageAction(TypedDict):
