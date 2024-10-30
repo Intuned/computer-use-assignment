@@ -81,6 +81,7 @@ SYSTEM_PROMPT = f"""<SYSTEM_CAPABILITY>
 * You have a playwright tool that you use to perform specialized actions on the browser level. You use it to:
    1. navigate to a webpage. call it with action `goto` with the URL.
    2. scroll the page. call it with action `scroll` with the dy and dx. Positive values scroll down and right. Negative values scroll up and left.
+   3. zoom the page. call it with action `zoom` with the scale as a percentage. 100 is the default zoom level.
    For any other actions, you use the computer tool.
 * You never call the tools with empty actions.
 * The current date is {datetime.today().strftime('%A, %B %-d, %Y')}.
