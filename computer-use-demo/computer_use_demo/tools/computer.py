@@ -13,6 +13,8 @@ from .base import BaseAnthropicTool, ToolError, ToolResult
 
 from playwright.async_api import Playwright, Page
 
+from .utils.screenshot import take_screenshot
+
 OUTPUT_DIR = "/tmp/outputs"
 
 TYPING_DELAY_MS = 12
@@ -228,9 +230,8 @@ class ComputerTool(BaseAnthropicTool):
                 return ToolResult(
                     output=f"Moved mouse to {self.mouse_x}, {self.mouse_y}",
                     error=None,
-                    base64_image=(await self.screenshot())[1]
+                    base64_image=await self.screenshot()
                 )
-            # return await self.shell(f"{self.xdotool} mousemove --sync {x} {y}")
             elif action == "left_click_drag":
                 try:
                     await self.page.mouse.down()
@@ -238,7 +239,7 @@ class ComputerTool(BaseAnthropicTool):
                     return ToolResult(
                         output=f"Dragged mouse to {self.mouse_x}, {self.mouse_y}",
                         error=None,
-                        base64_image=(await self.screenshot())[1]
+                        base64_image=await self.screenshot()
                     )
                 finally:
                     await self.page.mouse.up()
@@ -257,31 +258,20 @@ class ComputerTool(BaseAnthropicTool):
                     return ToolResult(
                         output=f"Pressed key: {text}",
                         error=None,
-                        base64_image=(await self.screenshot())[1]
+                        base64_image=await self.screenshot()
                     )
                 except Exception as e:
                     return ToolResult(
                         output=None,
                         error=f"Failed to press key: {text}: {e}"
                     )
-                # return await self.shell(f"{self.xdotool} key -- {text}")
             elif action == "type":
                 await self.page.keyboard.type(text, delay=TYPING_DELAY_MS)
                 return ToolResult(
                     output=f"Typed: {text}",
                     error=None,
-                    base64_image=(await self.screenshot())[1]
+                    base64_image=await self.screenshot()
                 )
-                # results: list[ToolResult] = []
-                # for chunk in chunks(text, TYPING_GROUP_SIZE):
-                #     cmd = f"{self.xdotool} type --delay {TYPING_DELAY_MS} -- {shlex.quote(chunk)}"
-                #     results.append(await self.shell(cmd, take_screenshot=False))
-                # screenshot_base64 = (await self.screenshot()).base64_image
-                # return ToolResult(
-                #     output="".join(result.output or "" for result in results),
-                #     error="".join(result.error or "" for result in results),
-                #     base64_image=screenshot_base64,
-                # )
 
         if action in (
                 "left_click",
@@ -297,37 +287,65 @@ class ComputerTool(BaseAnthropicTool):
                 raise ToolError(f"coordinate is not accepted for {action}")
 
             if action == "screenshot":
-                return (await self.screenshot())[0]
+                return ToolResult(
+                    output="Taken screenshot",
+                    error="",
+                    base64_image=await self.screenshot(),
+                ),
             elif action == "cursor_position":
                 return ToolResult(
                     output=f"X={self.mouse_x}, Y={self.mouse_y}",
                 )
-                # result = await self.shell(
-                #     f"{self.xdotool} getmouselocation --shell",
-                #     take_screenshot=False,
-                # )
-                # output = result.output or ""
-                # x, y = self.scale_coordinates(
-                #     ScalingSource.COMPUTER,
-                #     int(output.split("X=")[1].split("\n")[0]),
-                #     int(output.split("Y=")[1].split("\n")[0]),
-                # )
-                # return result.replace(output=f"X={x},Y={y}")
             else:
+                xpath = await self.page.evaluate("""([x, y]) => {
+    function getElementXPath(element) {
+      if (!element || !element.parentNode || element.nodeName === "#document") {
+        return null;
+      }
+    
+      let siblingsCount = 1;
+      const parent = element.parentNode;
+      const nodeName = element.nodeName.toLowerCase();
+    
+      const siblings = Array.from(parent.childNodes).filter(
+        (node) => node.nodeType === 1 // Node.ELEMENT_NODE
+      );
+    
+      for (const sibling of siblings) {
+        if (sibling === element) {
+          break;
+        }
+        if (sibling.nodeName.toLowerCase() === nodeName) {
+          siblingsCount++;
+        }
+      }
+    
+      const parentXPath = getElementXPath(parent);
+    
+      if (element.nodeName === "#text") {
+        return parentXPath;
+      }
+    
+      return parentXPath
+        ? `${parentXPath}/${nodeName}[${siblingsCount}]`
+        : `${nodeName}[${siblingsCount}]`;
+    }
+    
+    const element = document.elementFromPoint(x, y);
+    return getElementXPath(element);
+}
+                """, [self.mouse_x, self.mouse_y])
                 button = action.split("_")[0]
                 if button == "double":
+                    await self.page.mouse.dblclick(self.mouse_x, self.mouse_y)
+                else:
                     await self.page.mouse.click(
-                        self.mouse_x, self.mouse_y
+                        self.mouse_x, self.mouse_y, button=button
                     )
-                    await self.page.wait_for_timeout(500)
-                    button = "left"
-                await self.page.mouse.click(
-                    self.mouse_x, self.mouse_y, button=button
-                )
                 return ToolResult(
-                    output=f"Clicked {button} button at {self.mouse_x}, {self.mouse_y}",
+                    output=f"Clicked {button} button at {self.mouse_x}, {self.mouse_y}. Xpath = {xpath}",
                     error=None,
-                    base64_image=(await self.screenshot())[1]
+                    base64_image=await self.screenshot()
                 )
                 # click_arg = {
                 #     "left_click": "1",
@@ -340,58 +358,7 @@ class ComputerTool(BaseAnthropicTool):
         raise ToolError(f"Invalid action: \"{action}\"")
 
     async def screenshot(self):
-        # await self.page.wait_for_timeout(1000)
-        try:
-            screenshot = await self.page.screenshot()
-        except:
-            screenshot = await self.page.screenshot(
-                timeout=0
-            )
-        # TODO scaling if needed
-        screenshot_b64 = base64.b64encode(screenshot).decode()
-        return ToolResult(
-            output="Taken screenshot",
-            error="",
-            base64_image=screenshot_b64,
-        ), screenshot_b64
-        # """Take a screenshot of the current screen and return the base64 encoded image."""
-        # output_dir = Path(OUTPUT_DIR)
-        # output_dir.mkdir(parents=True, exist_ok=True)
-        # path = output_dir / f"screenshot_{uuid4().hex}.png"
-        #
-        # # Try gnome-screenshot first
-        # if shutil.which("gnome-screenshot"):
-        #     screenshot_cmd = f"{self._display_prefix}gnome-screenshot -f {path} -p"
-        # else:
-        #     # Fall back to scrot if gnome-screenshot isn't available
-        #     screenshot_cmd = f"{self._display_prefix}scrot -p {path}"
-        #
-        # result = await self.shell(screenshot_cmd, take_screenshot=False)
-        # if self._scaling_enabled:
-        #     x, y = self.scale_coordinates(
-        #         ScalingSource.COMPUTER, self.width, self.height
-        #     )
-        #     await self.shell(
-        #         f"convert {path} -resize {x}x{y}! {path}", take_screenshot=False
-        #     )
-        #
-        # if path.exists():
-        #     return result.replace(
-        #         base64_image=base64.b64encode(path.read_bytes()).decode()
-        #     )
-        # raise ToolError(f"Failed to take screenshot: {result.error}")
-
-    # async def shell(self, command: str, take_screenshot=True) -> ToolResult:
-    #     """Run a shell command and return the output, error, and optionally a screenshot."""
-    #     _, stdout, stderr = await run(command)
-    #     base64_image = None
-    #
-    #     if take_screenshot:
-    #         # delay to let things settle before taking a screenshot
-    #         await asyncio.sleep(self._screenshot_delay)
-    #         base64_image = (await self.screenshot()).base64_image
-    #
-    #     return ToolResult(output=stdout, error=stderr, base64_image=base64_image)
+        return await take_screenshot(self.page)
 
     def scale_coordinates(self, source: ScalingSource, x: int, y: int):
         """Scale coordinates to a target maximum resolution."""
