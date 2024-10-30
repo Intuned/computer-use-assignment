@@ -29,7 +29,7 @@ from anthropic.types.beta import (
     BetaToolUseBlockParam,
 )
 
-from .tools import BashTool, ComputerTool, EditTool, ToolCollection, ToolResult
+from .tools import ComputerTool, ToolCollection, ToolResult
 
 from playwright.async_api import Page
 
@@ -83,6 +83,9 @@ SYSTEM_PROMPT = f"""<SYSTEM_CAPABILITY>
    2. scroll the page. call it with action `scroll` with the dy and dx. Positive values scroll down and right. Negative values scroll up and left.
    3. zoom the page. call it with action `zoom` with the scale as a percentage. 100 is the default zoom level.
    For any other actions, you use the computer tool.
+* The computer tool with "click" action has additional functionality that provides the Xpath to the element clicked.
+* When asked to provide the xpath, only use the xpath obtained from the computer tool with click action.
+* If you receive a screenshot that looks malformed or empty when it should not be (for example, empty screenshot after a scroll), try to take another screenshot.
 * You never call the tools with empty actions.
 * The current date is {datetime.today().strftime('%A, %B %-d, %Y')}.
 </SYSTEM_CAPABILITY>
