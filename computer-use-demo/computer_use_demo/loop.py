@@ -119,58 +119,17 @@ async def sampling_loop(
     )
 
     while True:
-        enable_prompt_caching = False
-        betas = [COMPUTER_USE_BETA_FLAG]
-        image_truncation_threshold = 10
-        if provider == APIProvider.ANTHROPIC:
-            client = Anthropic(api_key=api_key)
-            enable_prompt_caching = True
-        elif provider == APIProvider.VERTEX:
-            client = AnthropicVertex()
-        elif provider == APIProvider.BEDROCK:
-            client = AnthropicBedrock()
-
-        if enable_prompt_caching:
-            betas.append(PROMPT_CACHING_BETA_FLAG)
-            _inject_prompt_caching(messages)
-            # Is it ever worth it to bust the cache with prompt caching?
-            image_truncation_threshold = 50
-            system["cache_control"] = {"type": "ephemeral"}
-
-        if only_n_most_recent_images:
-            _maybe_filter_to_n_most_recent_images(
-                messages,
-                only_n_most_recent_images,
-                min_removal_threshold=image_truncation_threshold,
-            )
-
-        # Call the API
-        # we use raw_response to provide debug information to streamlit. Your
-        # implementation may be able call the SDK directly with:
-        # `response = client.messages.create(...)` instead.
-        try:
-            raw_response = client.beta.messages.with_raw_response.create(
-                max_tokens=max_tokens,
-                messages=messages,
-                model=model,
-                system=[system],
-                tools=tool_collection.to_params(),
-                betas=betas,
-            )
-        except (APIStatusError, APIResponseValidationError) as e:
-            api_response_callback(e.request, e.response, e)
-            return messages
-        except APIError as e:
-            api_response_callback(e.request, e.body, e)
-            return messages
-
-        api_response_callback(
-            raw_response.http_response.request, raw_response.http_response, None
+        response_params = await completion(
+            model=model,
+            provider=provider,
+            messages=messages,
+            api_response_callback=api_response_callback,
+            system=system,
+            tool_collection=tool_collection,
+            api_key=api_key,
+            only_n_most_recent_images=only_n_most_recent_images,
+            max_tokens=max_tokens,
         )
-
-        response = raw_response.parse()
-
-        response_params = _response_to_params(response)
         messages.append(
             {
                 "role": "assistant",
@@ -195,6 +154,78 @@ async def sampling_loop(
             return messages
 
         messages.append({"content": tool_result_content, "role": "user"})
+
+
+async def completion(
+    *,
+        model: str,
+        provider: APIProvider,
+        messages: list[BetaMessageParam],
+        api_response_callback: Callable[
+            [httpx.Request, httpx.Response | object | None, Exception | None], None
+        ],
+        system: BetaTextBlockParam | None = None,
+        tool_collection: ToolCollection,
+        api_key: str,
+        only_n_most_recent_images: int | None = None,
+        max_tokens: int = 4096,
+    ):
+    enable_prompt_caching = True
+    betas = [COMPUTER_USE_BETA_FLAG]
+    image_truncation_threshold = 10
+    system = system or BetaTextBlockParam(
+        type="text",
+        text=SYSTEM_PROMPT,
+    )
+    if provider == APIProvider.ANTHROPIC:
+        client = Anthropic(api_key=api_key)
+        enable_prompt_caching = True
+    elif provider == APIProvider.VERTEX:
+        client = AnthropicVertex()
+    elif provider == APIProvider.BEDROCK:
+        client = AnthropicBedrock()
+
+    if enable_prompt_caching:
+        betas.append(PROMPT_CACHING_BETA_FLAG)
+        _inject_prompt_caching(messages)
+        # Is it ever worth it to bust the cache with prompt caching?
+        image_truncation_threshold = 50
+        system["cache_control"] = {"type": "ephemeral"}
+
+    if only_n_most_recent_images:
+        _maybe_filter_to_n_most_recent_images(
+            messages,
+            only_n_most_recent_images,
+            min_removal_threshold=image_truncation_threshold,
+        )
+
+    # Call the API
+    # we use raw_response to provide debug information to streamlit. Your
+    # implementation may be able call the SDK directly with:
+    # `response = client.messages.create(...)` instead.
+    try:
+        raw_response = client.beta.messages.with_raw_response.create(
+            max_tokens=max_tokens,
+            messages=messages,
+            model=model,
+            system=[system],
+            tools=tool_collection.to_params(),
+            betas=betas,
+        )
+    except (APIStatusError, APIResponseValidationError) as e:
+        api_response_callback(e.request, e.response, e)
+        return messages
+    except APIError as e:
+        api_response_callback(e.request, e.body, e)
+        return messages
+
+    api_response_callback(
+        raw_response.http_response.request, raw_response.http_response, None
+    )
+
+    response = raw_response.parse()
+
+    return _response_to_params(response)
 
 
 def _maybe_filter_to_n_most_recent_images(

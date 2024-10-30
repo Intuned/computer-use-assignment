@@ -53,6 +53,10 @@ class ToolResult:
         """Returns a new ToolResult with the given fields replaced."""
         return replace(self, **kwargs)
 
+    def __repr__(self):
+        return (f"ToolResult(output={self.output}, error={self.error}, "
+                f"base64_image={"<image>" if self.base64_image else "None"}, system={self.system})")
+
 
 class CLIResult(ToolResult):
     """A ToolResult that can be rendered as a CLI output."""

@@ -218,11 +218,13 @@ class ComputerTool(BaseAnthropicTool):
             x, y = self.scale_coordinates(
                 ScalingSource.API, coordinate[0], coordinate[1]
             )
-            self.mouse_x += x
-            self.mouse_y += y
+            dx = x - self.mouse_x
+            dy = y - self.mouse_y
+            self.mouse_x = x
+            self.mouse_y = y
 
             if action == "mouse_move":
-                await self.page.mouse.move(self.mouse_x, self.mouse_y)
+                await self.page.mouse.move(dx, dy)
                 return ToolResult(
                     output=f"Moved mouse to {self.mouse_x}, {self.mouse_y}",
                     error=None,
@@ -232,7 +234,7 @@ class ComputerTool(BaseAnthropicTool):
             elif action == "left_click_drag":
                 try:
                     await self.page.mouse.down()
-                    await self.page.mouse.move(self.mouse_x, self.mouse_y)
+                    await self.page.mouse.move(dx, dy)
                     return ToolResult(
                         output=f"Dragged mouse to {self.mouse_x}, {self.mouse_y}",
                         error=None,
