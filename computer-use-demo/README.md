@@ -5,7 +5,7 @@
 - Activate venv: `source venv/bin/activate`
 - Install dependencies: `pip install -r requirements.txt`
 - Make sure playwright is installed: `playwright install`
-- Copy/paste `.env.example`. Add Anthropic API key to it.
+- Copy/paste `.env.example` and name it `.env`. Add Anthropic API key to it.
 
 ## Experiments:
 - Completion: Ask AI to do something in one shot: `run_completion.ipynb` notebook.

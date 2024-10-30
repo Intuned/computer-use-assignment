@@ -1,8 +1,8 @@
 import json
-from typing import ClassVar, Literal, TypedDict, Union
+from typing import ClassVar, Literal, TypedDict, Union, cast
 
 from computer_use_demo.tools import ToolResult
-from computer_use_demo.tools.base import BaseAnthropicTool, ToolError
+from computer_use_demo.tools.base import BaseAnthropicTool, ToolError, ToolFailure
 
 from playwright.async_api import Page
 
@@ -14,8 +14,13 @@ class GotoPageAction(TypedDict):
 
 class ScrollPageAction(TypedDict):
     type: Literal["scroll"]
-    x: int
-    y: int
+    dx: int
+    dy: int
+
+
+class ZoomPageAction(TypedDict):
+    type: Literal["zoom"]
+    scale: float
 
 
 class Action(TypedDict):
@@ -39,32 +44,15 @@ class PlaywrightTool(BaseAnthropicTool):
         if isinstance(action, str):
             action = json.loads(action)
         if action["type"] == "goto":
-            try:
-                await self.page.goto(action["url"])
-                return ToolResult(
-                    output=f"Navigated to page {action["url"]}",
-                    error=None
-                )
-            except Exception as e:
-                return ToolResult(
-                    output=None,
-                    error=f"Failed to navigate to page {action["url"]}: {e}"
-                )
+            _action = cast(GotoPageAction, action)
+            return await self._goto(_action["url"])
         if action["type"] == "scroll":
-            try:
-                dx, dy = action["dx"], action["dy"]
-                await self.page.mouse.wheel(dx, dy)
-                return ToolResult(
-                    output=f"Scrolled",
-                    error=None
-                )
-            except Exception as e:
-                return ToolResult(
-                    output=None,
-                    error=f"Failed to scroll to bottom of page: {e}"
-                )
-        else:
-            raise ToolError(f"Invalid action: {action}")
+            _action = cast(ScrollPageAction, action)
+            return await self._scroll(_action["dx"], _action["dy"])
+        if action["type"] == "zoom":
+            _action = cast(ZoomPageAction, action)
+            return await self.zoom(_action["scale"])
+        return ToolFailure(error=f"Invalid action: {action}. Valid actions: goto, scroll, zoom")
 
     def to_params(self) -> dict:
         return {
@@ -102,10 +90,48 @@ class PlaywrightTool(BaseAnthropicTool):
                                         "type": "integer"
                                     }
                                 },
-                                "required": ["type", "x", "y"]
+                                "required": ["type", "dx", "dy"]
+                            },
+
+                            {
+                                "type": "object",
+                                "properties": {
+                                    "type": {
+                                        "type": "string",
+                                        "enum": ["zoom"]
+                                    },
+                                    "scale": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "description": "The zoom scale to set the page to in percentage. "
+                                                       "100 means original scale."
+                                    }
+                                },
+                                "required": ["type", "scale"]
                             }
                         ]
                     }
                 }
             },
         }
+
+    async def _goto(self, url: str):
+        try:
+            await self.page.goto(url)
+            return ToolResult(output=f"Navigated to page {url}")
+        except Exception as e:
+            return ToolFailure(error=f"Failed to navigate to page {url}: {e}")
+
+    async def _scroll(self, dx: int, dy: int):
+        try:
+            await self.page.mouse.wheel(dx, dy)
+            return ToolResult(output=f"Scrolled")
+        except Exception as e:
+            return ToolFailure(error=f"Failed to scroll to bottom of page: {e}")
+
+    async def zoom(self, scale: float):
+        try:
+            await self.page.evaluate(f"document.body.style.zoom = '{scale}%'")
+            return ToolResult(output=f"Zoomed to {scale}%")
+        except Exception as e:
+            return ToolFailure(error=f"Failed to zoom to {scale}%: {e}")

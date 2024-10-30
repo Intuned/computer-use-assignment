@@ -340,9 +340,13 @@ class ComputerTool(BaseAnthropicTool):
         raise ToolError(f"Invalid action: \"{action}\"")
 
     async def screenshot(self):
-        screenshot = await self.page.screenshot(
-            timeout=0
-        )
+        # await self.page.wait_for_timeout(1000)
+        try:
+            screenshot = await self.page.screenshot()
+        except:
+            screenshot = await self.page.screenshot(
+                timeout=0
+            )
         # TODO scaling if needed
         screenshot_b64 = base64.b64encode(screenshot).decode()
         return ToolResult(
