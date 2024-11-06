@@ -155,4 +155,5 @@ def format_conversation(messages, format: Literal["markdown", "tty"] = "markdown
 
 def display_conversation_markdown(messages):
     markdown = format_conversation(messages, format="markdown")
-    display_markdown(markdown, raw=True)
+    if markdown.strip() != "":
+        display_markdown(markdown, raw=True)

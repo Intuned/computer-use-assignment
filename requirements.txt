@@ -5,3 +5,5 @@ boto3>=1.28.57
 google-auth<3,>=2
 playwright==1.47.0
 python-dotenv
+ipykernel
+termcolor

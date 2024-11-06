@@ -218,10 +218,12 @@ async def completion(
         )
     except (APIStatusError, APIResponseValidationError) as e:
         api_response_callback(e.request, e.response, e)
-        return messages
+        raise e
+        # return messages
     except APIError as e:
         api_response_callback(e.request, e.body, e)
-        return messages
+        raise e
+        # return messages
 
     api_response_callback(
         raw_response.http_response.request, raw_response.http_response, None

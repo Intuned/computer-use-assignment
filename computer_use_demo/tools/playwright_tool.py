@@ -26,7 +26,7 @@ class ZoomPageAction(TypedDict):
 
 
 class Action(TypedDict):
-    action: Union[GotoPageAction, ScrollPageAction]
+    action: Union[GotoPageAction, ScrollPageAction, ZoomPageAction]
 
 
 class PlaywrightTool(BaseAnthropicTool):
@@ -45,6 +45,8 @@ class PlaywrightTool(BaseAnthropicTool):
     ):
         if isinstance(action, str):
             action = json.loads(action)
+        if "type" not in action:
+            return ToolFailure(error="Action must have a type")
         if action["type"] == "goto":
             _action = cast(GotoPageAction, action)
             return await self._goto(_action["url"])
