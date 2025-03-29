@@ -1,5 +1,9 @@
-from abc import ABCMeta, abstractmethod
-from dataclasses import dataclass, fields, replace
+# type: ignore
+from abc import ABCMeta
+from abc import abstractmethod
+from dataclasses import dataclass
+from dataclasses import fields
+from dataclasses import replace
 from typing import Any
 
 from anthropic.types.beta import BetaToolUnionParam
@@ -33,9 +37,7 @@ class ToolResult:
         return any(getattr(self, field.name) for field in fields(self))
 
     def __add__(self, other: "ToolResult"):
-        def combine_fields(
-            field: str | None, other_field: str | None, concatenate: bool = True
-        ):
+        def combine_fields(field: str | None, other_field: str | None, concatenate: bool = True):
             if field and other_field:
                 if concatenate:
                     return field + other_field
@@ -54,8 +56,7 @@ class ToolResult:
         return replace(self, **kwargs)
 
     def __repr__(self):
-        return (f"ToolResult(output={self.output}, error={self.error}, "
-                f"base64_image={"<image>" if self.base64_image else "None"}, system={self.system})")
+        return f"ToolResult(output={self.output}, error={self.error}, " f"base64_image={"<image>" if self.base64_image else "None"}, system={self.system})"
 
 
 class CLIResult(ToolResult):

@@ -8,8 +8,7 @@
 - Copy/paste `.env.example` and name it `.env`. Add Anthropic API key to it.
 
 ## Experiments:
-- Completion: Ask AI to do something in one shot: `run_completion.ipynb` notebook.
-- Agentic: Have conversation with AI and let it use tools "agentically": `run_agentic.ipynb` notebook.
+- Run `python ./example.py`
 
 ## Modifications
 - Shell and edit tools are commented out, they are not relevant.
